@@ -1,11 +1,8 @@
-# For Root Use
-
 import os
 import subprocess
 import time
 
 def run_command(command, sudo=False, background=False):
-    
     if sudo:
         command = f"sudo {command}"
     
@@ -28,7 +25,6 @@ def run_command(command, sudo=False, background=False):
 
 
 def install_dependencies():
-    
     print("Installing dependencies...")
     result = run_command("apt update && apt install -y openvpn easy-rsa bridge-utils curl", sudo=True)
     if result is None:
@@ -38,30 +34,24 @@ def install_dependencies():
 
 
 def fix_repository_issues():
-    
     print("Fixing repository issues...")
 
     try:
-        
         run_command("rm -f /etc/apt/sources.list.d/influxdata.list", sudo=True)
         run_command("rm -f /etc/apt/sources.list.d/influxdb.list", sudo=True)
-
         
         influxdb_key = "/usr/share/keyrings/influxdb-archive-keyring.gpg"
         if not os.path.exists(influxdb_key):
             run_command("curl -fsSL https://repos.influxdata.com/influxdb.key | gpg --dearmor -o /usr/share/keyrings/influxdb-archive-keyring.gpg", sudo=True)
             run_command("echo 'deb [signed-by=/usr/share/keyrings/influxdb-archive-keyring.gpg] https://repos.influxdata.com/debian buster stable' | sudo tee /etc/apt/sources.list.d/influxdata.list", sudo=True)
 
-        
         run_command("rm -f /etc/apt/sources.list.d/docker.list", sudo=True)
-
         
         docker_key = "/usr/share/keyrings/docker-archive-keyring.gpg"
         if not os.path.exists(docker_key):
             run_command("curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg", sudo=True)
             run_command("echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian bookworm stable' | sudo tee /etc/apt/sources.list.d/docker.list", sudo=True)
 
-        
         run_command("apt update", sudo=True)
         print("Repository issues fixed.")
     except Exception as e:
@@ -69,20 +59,17 @@ def fix_repository_issues():
 
 
 def setup_easy_rsa():
-    
     print("Setting up Easy-RSA...")
 
     easy_rsa_path = os.path.expanduser("~/easy-rsa")
     
     try:
-        
         if not os.path.exists(easy_rsa_path):
             print("Creating new Easy-RSA directory...")
             run_command(f"mkdir -p {easy_rsa_path}", sudo=False)
         else:
             print(f"Easy-RSA directory already exists at {easy_rsa_path}")
 
-        
         if not os.path.exists(os.path.join(easy_rsa_path, "easyrsa")):
             print("Copying Easy-RSA files to the new directory...")
             run_command(f"cp -r /usr/share/easy-rsa/* {easy_rsa_path}", sudo=False)
@@ -91,7 +78,6 @@ def setup_easy_rsa():
 
         os.chdir(easy_rsa_path)
 
-        
         if not os.path.exists(os.path.join(easy_rsa_path, "pki")):
             print("Initializing PKI...")
             result = run_command("./easyrsa init-pki", sudo=False)
@@ -99,7 +85,6 @@ def setup_easy_rsa():
         else:
             print("PKI already initialized.")
 
-        
         if not os.path.exists(os.path.join(easy_rsa_path, "pki", "ca.crt")):
             print("Building Certificate Authority (CA)...")
             result = run_command("echo -ne '\\n' | ./easyrsa build-ca nopass", sudo=False)
@@ -107,24 +92,17 @@ def setup_easy_rsa():
         else:
             print("CA already exists.")
 
-        
         print("Generating server request using OpenSSL...")
         server_key_path = os.path.join(easy_rsa_path, "pki", "private", "server.key")
         server_csr_path = os.path.join(easy_rsa_path, "pki", "reqs", "server.csr")
         server_cert_path = os.path.join(easy_rsa_path, "pki", "issued", "server.crt")
 
-        
-        run_command(f"openssl genpkey -algorithm RSA -out {server_key_path} -aes256", sudo=False)
-
-        
+        run_command(f"openssl genpkey -algorithm RSA -out {server_key_path}", sudo=False)
         run_command(f"openssl req -new -key {server_key_path} -out {server_csr_path} -subj \"/C=US/ST=State/L=City/O=Organization/CN=server\"", sudo=False)
-
-        
         run_command(f"openssl x509 -req -in {server_csr_path} -CA {os.path.join(easy_rsa_path, 'pki', 'ca.crt')} -CAkey {os.path.join(easy_rsa_path, 'pki', 'private', 'ca.key')} -CAcreateserial -out {server_cert_path} -days 365", sudo=False)
 
         print("Server certificate generated successfully.")
 
-        
         dh_param_path = os.path.join(easy_rsa_path, "pki", "dh.pem")
         if not os.path.exists(dh_param_path):
             print("Generating Diffie-Hellman parameters...")
@@ -132,19 +110,13 @@ def setup_easy_rsa():
         else:
             print("DH parameters already exist.")
 
-        
         print("Generating client certificate using OpenSSL...")
         client_key_path = os.path.join(easy_rsa_path, "pki", "private", "client.key")
         client_csr_path = os.path.join(easy_rsa_path, "pki", "reqs", "client.csr")
         client_cert_path = os.path.join(easy_rsa_path, "pki", "issued", "client.crt")
 
-        
-        run_command(f"openssl genpkey -algorithm RSA -out {client_key_path} -aes256", sudo=False)
-
-        
+        run_command(f"openssl genpkey -algorithm RSA -out {client_key_path}", sudo=False)
         run_command(f"openssl req -new -key {client_key_path} -out {client_csr_path} -subj \"/C=US/ST=State/L=City/O=Organization/CN=client\"", sudo=False)
-
-        
         run_command(f"openssl x509 -req -in {client_csr_path} -CA {os.path.join(easy_rsa_path, 'pki', 'ca.crt')} -CAkey {os.path.join(easy_rsa_path, 'pki', 'private', 'ca.key')} -CAcreateserial -out {client_cert_path} -days 365", sudo=False)
 
         print("Client certificate generated successfully.")
@@ -155,17 +127,27 @@ def setup_easy_rsa():
 
 
 def generate_ovpn_file():
-    
     print("Generating .ovpn client file...")
 
     client_ovpn_file = "/root/client.ovpn"
-    
-    
+
     ca_cert_path = "/root/easy-rsa/pki/ca.crt"
     client_cert_path = "/root/easy-rsa/pki/issued/client.crt"
     client_key_path = "/root/easy-rsa/pki/private/client.key"
 
-    # Fetch the server IP dynamically using 'hostname -I'
+    try:
+        with open(ca_cert_path, "r") as ca_file:
+            ca_cert_content = ca_file.read()
+
+        with open(client_cert_path, "r") as client_cert_file:
+            client_cert_content = client_cert_file.read()
+
+        with open(client_key_path, "r") as client_key_file:
+            client_key_content = client_key_file.read()
+    except FileNotFoundError as e:
+        print(f"Error reading files: {e}")
+        return
+
     server_ip = run_command("hostname -I | awk '{print $1}'").strip()
 
     ovpn_content = f"""
@@ -177,66 +159,68 @@ resolv-retry infinite
 nobind
 persist-key
 persist-tun
-ca {ca_cert_path}
-cert {client_cert_path}
-key {client_key_path}
-comp-lzo
+ca ca.crt
+cert client.crt
+key client.key
+cipher AES-256-CBC
+auth SHA256
 verb 3
+
+<ca>
+{ca_cert_content}
+</ca>
+<cert>
+{client_cert_content}
+</cert>
+<key>
+{client_key_content}
+</key>
 """
-    
-    
-    with open(client_ovpn_file, "w") as f:
-        f.write(ovpn_content)
+
+    with open(client_ovpn_file, "w") as ovpn_file:
+        ovpn_file.write(ovpn_content)
 
     print(f".ovpn client configuration file generated at {client_ovpn_file}")
 
 
 def configure_openvpn_server():
-    
     print("Configuring OpenVPN server...")
+
     try:
-        run_command("mkdir -p /etc/openvpn/server", sudo=True)
-        
-        
+        run_command("sudo mkdir -p /etc/openvpn/server", sudo=True)
         run_command("sudo cp /root/easy-rsa/pki/ca.crt /etc/openvpn/server/", sudo=True)
         run_command("sudo cp /root/easy-rsa/pki/issued/server.crt /etc/openvpn/server/", sudo=True)
         run_command("sudo cp /root/easy-rsa/pki/private/server.key /etc/openvpn/server/", sudo=True)
         run_command("sudo cp /root/easy-rsa/pki/dh.pem /etc/openvpn/server/", sudo=True)
 
-        server_conf = """
-        port 1194
-        proto udp
-        dev tun
-        ca ca.crt
-        cert server.crt
-        key server.key
-        dh dh.pem
-        server 10.8.0.0 255.255.255.0
-        push "redirect-gateway def1 bypass-dhcp"
-        push "dhcp-option DNS 8.8.8.8"
-        push "dhcp-option DNS 8.8.4.4"
-        keepalive 10 120
-        cipher AES-256-CBC
-        auth SHA256
-        comp-lzo
-        user nobody
-        group nogroup
-        persist-key
-        persist-tun
-        status openvpn-status.log
-        verb 3
-        """
-        with open("/etc/openvpn/server.conf", "w") as f:
-            f.write(server_conf)
+        print("Server certificates and keys copied.")
 
-        print("OpenVPN server configured successfully.")
+        # Configure firewall rules to allow OpenVPN
+        run_command("sudo ufw allow 1194/udp", sudo=True)
+        run_command("sudo ufw reload", sudo=True)
+        print("Firewall configured for OpenVPN.")
+
+        # Restart OpenVPN server service
+        run_command("sudo systemctl restart openvpn@server", sudo=True)
+        print("OpenVPN server restarted.")
+
     except Exception as e:
         print(f"Error configuring OpenVPN server: {e}")
 
 
-if __name__ == "__main__":
+def check_openvpn_status():
+    print("Checking OpenVPN server status...")
+    result = run_command("sudo systemctl status openvpn@server", sudo=True)
+    print(f"OpenVPN server status:\n{result}")
+
+
+def main():
     install_dependencies()
     fix_repository_issues()
     setup_easy_rsa()
-    configure_openvpn_server()
     generate_ovpn_file()
+    configure_openvpn_server()
+    check_openvpn_status()
+
+if __name__ == "__main__":
+    main()
